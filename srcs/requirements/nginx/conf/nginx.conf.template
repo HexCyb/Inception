@@ -1,0 +1,44 @@
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    access_log    /dev/stdout;
+    sendfile      on;
+    server_tokens off;
+
+    # the only way into the stack: HTTPS on 443, TLS 1.2 or 1.3
+    server {
+        listen 443 ssl;
+        server_name __DOMAIN_NAME__;
+
+        ssl_certificate     /etc/nginx/ssl/inception.crt;
+        ssl_certificate_key /etc/nginx/ssl/inception.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+
+        root  /var/www/html;
+        index index.php index.html;
+
+        location / {
+            try_files $uri $uri/ /index.php?$args;
+        }
+
+        # PHP goes to the wordpress container (php-fpm on port 9000)
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass  wordpress:9000;
+            fastcgi_index index.php;
+            include       fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+        }
+    }
+}
