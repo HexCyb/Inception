@@ -1,5 +1,7 @@
 # Inception
 
+[![CI](https://github.com/HexCyb/Inception/actions/workflows/ci.yml/badge.svg)](https://github.com/HexCyb/Inception/actions/workflows/ci.yml)
+
 A small WordPress infrastructure built with **Docker Compose**: three containers, one per service, each built from `debian:bookworm`. They talk over a private network, and the only way in is HTTPS on port 443.
 
 > Originally completed at **42 Türkiye** as part of the common core. This repository is a 2026 rewrite, because the original code was lost.
@@ -75,3 +77,10 @@ srcs/
     ├── wordpress/   Dockerfile   conf/www.conf              tools/entrypoint.sh
     └── nginx/       Dockerfile   conf/nginx.conf.template   tools/entrypoint.sh
 ```
+
+## Continuous integration
+
+Every push runs [GitHub Actions](https://github.com/HexCyb/Inception/actions/workflows/ci.yml) (`.github/workflows/ci.yml`):
+
+- ShellCheck on the three entrypoints and `docker compose config` on the compose file
+- **full stack**: `make` generates the secrets, builds the three images and starts them; the job then waits for WordPress over HTTPS through NGINX, checks a TLS 1.3 handshake, checks that 443 is the only published port and that MariaDB is healthy
