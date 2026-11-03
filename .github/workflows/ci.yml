@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck the entrypoints
+        run: shellcheck srcs/requirements/*/tools/*.sh
+      - name: Compose file is valid
+        run: |
+          cp srcs/.env.example srcs/.env
+          mkdir -p secrets && for s in db_password db_root_password wp_admin_password wp_user_password; do echo ci > secrets/$s.txt; done
+          docker compose -f srcs/docker-compose.yml --env-file srcs/.env config --quiet
+
+  stack:
+    name: full stack (build, start, HTTPS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure a data folder for the runner
+        run: |
+          cp srcs/.env.example srcs/.env
+          sed -i "s|^DATA_PATH=.*|DATA_PATH=$RUNNER_TEMP/data|" srcs/.env
+      - name: make (generates secrets, builds three images, starts them)
+        run: make
+      - name: WordPress answers through NGINX over HTTPS
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -sk --resolve login.42.fr:443:127.0.0.1 -o /tmp/page.html -w '%{http_code}' https://login.42.fr/ || true)
+            if [ "$code" = 200 ] && grep -qi wordpress /tmp/page.html; then echo "ready after $((i * 5)) s"; exit 0; fi
+            sleep 5
+          done
+          echo "last status: $code"; exit 1
+      - name: TLS 1.3 handshake works
+        run: curl -sk --tlsv1.3 --resolve login.42.fr:443:127.0.0.1 -o /dev/null https://login.42.fr/
+      - name: Port 443 is the only one published
+        run: |
+          ports=$(docker ps --format '{{.Ports}}' | grep -o '0\.0\.0\.0:[0-9]*' | sort -u)
+          echo "published: $ports"
+          test "$ports" = "0.0.0.0:443"
+      - name: Containers restart policy and health
+        run: |
+          docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' mariadb wordpress nginx
+          test "$(docker inspect -f '{{.State.Health.Status}}' mariadb)" = healthy
+      - name: Logs
+        if: failure()
+        run: docker compose -f srcs/docker-compose.yml --env-file srcs/.env -p inception logs
+      - name: Tear down
+        if: always()
+        run: docker compose -f srcs/docker-compose.yml --env-file srcs/.env -p inception down -v
