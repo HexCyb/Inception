@@ -8,7 +8,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: ShellCheck the entrypoints
         run: shellcheck srcs/requirements/*/tools/*.sh
       - name: Compose file is valid
@@ -21,7 +21,7 @@ jobs:
     name: full stack (build, start, HTTPS)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure a data folder for the runner
         run: |
           cp srcs/.env.example srcs/.env
